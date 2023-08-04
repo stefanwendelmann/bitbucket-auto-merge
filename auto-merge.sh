@@ -1,21 +1,21 @@
-MAIN=master
+echo "Current Branch is: $BITBUCKET_BRANCH"
 
-git checkout $MAIN #>/dev/null 2>&1
+git checkout $BITBUCKET_BRANCH #>/dev/null 2>&1
 git branch -r | grep -v '\->' | while read remote; do git branch --track "${remote#origin/}" "$remote" || true; done #>/dev/null 2>&1 #set tracking of all remote branches
 git fetch --all #>/dev/null 2>&1 # fetch all remote branches to the local repository
 git pull --all #>/dev/null 2>&1 # update all local branches
 for BRANCH in `git branch --list | sed 's/\*//g'`
 do
-    COMMITS_AHEAD_OF_MASTER=`git log $MAIN..$BRANCH`
+    COMMITS_AHEAD_OF_MASTER=`git log $BITBUCKET_BRANCH..$BRANCH`
     if [ -n "$COMMITS_AHEAD_OF_MASTER" ]
     then
-        #echo "I am Ahead of my $MAIN: $BRANCH ... now check behind"
-        COMMITS_BEHIND_MASTER=`git log $BRANCH..$MAIN`
+        #echo "I am Ahead of my $BITBUCKET_BRANCH: $BRANCH ... now check behind"
+        COMMITS_BEHIND_MASTER=`git log $BRANCH..$BITBUCKET_BRANCH`
         if [ -n "$COMMITS_BEHIND_MASTER" ]
         then
-            echo "Try to merge $MAIN into $BRANCH"
+            echo "Try to merge $BITBUCKET_BRANCH into $BRANCH"
             git checkout $BRANCH
-            git merge  --no-commit --no-ff $MAIN
+            git merge --no-commit --no-ff $BITBUCKET_BRANCH
             CONFLICTS=$(git ls-files -u | wc -l)
             if [ "$CONFLICTS" -gt 0 ] ; then
                echo "There is a merge conflict. Aborting..."
@@ -42,10 +42,10 @@ do
                 -H "Authorization: Bearer ${BB_TOKEN}" \
                 -d '{
                     "title": "merge-resolver-bot/'$BRANCH'",
-                    "description": "Der Merge-Resolver Bot hat bei dem automatischen mergen von '$MAIN' nach '$BRANCH' merge-conflicts erkannt. \n \n Bitte löse diese",
+                    "description": "Der Merge-Resolver Bot hat bei dem automatischen mergen von '$BITBUCKET_BRANCH' nach '$BRANCH' merge-conflicts erkannt. \n \n Bitte löse diese",
                     "source": {
                       "branch": {
-                        "name": "'$MAIN'"
+                        "name": "'$BITBUCKET_BRANCH'"
                       }
                     },
                     "destination": {
@@ -63,7 +63,7 @@ do
 
             else
                # No Merge Conflict Then commit and push
-               git commit -m "merge from $MAIN"
+               git commit -m "merge from $BITBUCKET_BRANCH"
                git push
             fi
         fi
