@@ -1,0 +1,102 @@
+image: atlassian/default-image:4
+
+
+definitions:
+  steps:
+    - step: &build-native-and-push
+        name: Build Native Docker Image and Push
+        services:
+          - docker
+        image: maven:3.8-openjdk-17
+        caches:
+          - maven
+          - docker
+        artifacts:
+          - set_env.sh
+        script:
+          - /bin/bash local-run-env.sh
+          - mvn package
+          - IMAGE_NAME=$BITBUCKET_REPO_SLUG
+          - VERSION="${BITBUCKET_BRANCH////-}-${BITBUCKET_BUILD_NUMBER}"
+          - IMAGE="${DOCKERHUB_URL}/${BITBUCKET_PROJECT_KEY,,}/${IMAGE_NAME}:${VERSION}"
+          - docker build . -f src/main/docker/Dockerfile.jvm -t ${IMAGE}
+          - echo ${DOCKERHUB_PASSWORD} | docker login --username "$DOCKERHUB_USERNAME" --password-stdin ${DOCKERHUB_URL}
+          - docker push "${IMAGE}"
+          - docker logout ${DOCKERHUB_URL}
+          - echo "export IMAGE=$IMAGE" >> set_env.sh
+    - step: &deploy
+        name: Deploy default
+        clone:
+          enabled: true
+        deployment: default
+        runs-on:
+          - 'self.hosted'
+        script:
+          - if [ -e set_env.sh ]; then
+          -    cat set_env.sh
+          -    source set_env.sh
+          - fi
+          - pipe: atlassian/ssh-run:0.4.3
+            variables:
+              SSH_USER: $MY_SSH_USER
+              SERVER: $MY_SSH_HOST
+              SSH_KEY: $MY_SSH_KEY
+              MODE: 'script'
+              COMMAND: './deploy.sh'
+              ENV_VARS: >-
+                DOCKERHUB_URL='${DOCKERHUB_URL}'
+                DOCKERHUB_PASSWORD='${DOCKERHUB_PASSWORD}'
+                DOCKERHUB_USERNAME='${DOCKERHUB_USERNAME}'
+                IMAGE='${IMAGE}'
+                ENV_LOCATION='${ENV_LOCATION}'
+                DOCKER_NETWORK='${DOCKER_NETWORK}'
+                DOCKER_CONTAINER_NAME='${DOCKER_CONTAINER_NAME}'
+                TMP_FOLDER='${TMP_FOLDER}'
+
+    - step: &auto-merge
+        name: Auto Merge
+        clone:
+          depth: 'full'
+        script:
+          - apt-get update
+          - apt-get -y install curl jq
+          - /bin/bash auto-merge.sh
+
+pipelines:
+  default:
+    - step:
+        image: maven:3.8-openjdk-17
+        services:
+          - docker
+        caches:
+          - maven
+          - docker
+        name: Feature-Test-Pipeline
+        script:
+          - /bin/bash local-run-env.sh
+          - mvn clean verify
+
+  branches:
+    release/dev:
+      - step: *build-native-and-push
+      - step:
+          <<: *deploy
+          name: Deploy to DEV
+          deployment: dev
+    release/test:
+      - step: *build-native-and-push
+      - step:
+          <<: *deploy
+          name: Deploy to Test
+          deployment: test
+    master:
+      - parallel:
+          fail-fast: false
+          steps:
+            - step: *auto-merge
+            - step: *build-native-and-push
+      - step:
+          <<: *deploy
+          name: Deploy to Production
+          deployment: prod
+          trigger: manual
