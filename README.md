@@ -17,6 +17,7 @@ In order to get it working, you need to create a OAuth Consumer see below.
 5. Fill in required information, especially the name and give your new consumer permissions for different operations but in our case we’ll give permission to read and write pull requests. Make sure to check the This is a private consumer checkbox and a callback url (you can add any url).
 6. After saving the consumer, click the consumer to view the key and secret
 7. Create a variable (on workspace or repository level) with name BB_AUTH_STRING and the values should be added as key:value for instance VzW7ubArG8T3huEDXs:eRNqGCycMVPvfzsGhEyd7xP33tYLd2jZ, this variable should be secured. Now we can use this value as a variable in the pipeline to authenticate users.
+8. You can set the AUTO_MERGE_PR_RUN_LIMIT on repo or workspace level so that per run only n PRs will be created
 
 ## How it does it
 
